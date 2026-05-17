@@ -116,7 +116,7 @@ export const DEMO_GOALS: Goal[] = [
     title: "Mentor junior engineers",
     description: "Conduct bi-weekly coaching sessions and complete 4 architecture walkthroughs in Q1.",
     quarter: "Q1",
-    weightage: 25,
+    weightage: 15,
     progress: 45,
     shared: true,
     status: "approved",
