@@ -4,44 +4,18 @@ import { useMemo, useState } from "react";
 import { getGoalMetrics } from "@/analytics/metrics";
 import { getGoalRecommendations } from "@/ai/recommendations";
 import { groupGoalsByQuarter } from "@/dashboards/goal-summary";
+import { cloneDemoAudit, cloneDemoGoals, DEFAULT_DEMO_USER } from "@/lib/demo-data";
 import { GOAL_RULES, canSubmitForApproval, validateGoal } from "@/lib/goal-validation";
-import { Goal } from "@/lib/types";
+import { AuditEvent, Goal } from "@/lib/types";
 import { saveGoals } from "@/supabase/goal-service";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ChartNoAxesColumn, LockOpen, Share2, Target } from "lucide-react";
+import { ChartNoAxesColumn, LockOpen, RotateCcw, Share2, Target } from "lucide-react";
 
-const initialGoals: Goal[] = [
-  {
-    id: "1",
-    employee: "Avery Johnson",
-    title: "Improve platform reliability",
-    description: "Reduce incidents by 30% and complete SLA automation.",
-    quarter: "Q1",
-    weightage: 40,
-    progress: 55,
-    shared: true,
-    status: "submitted",
-    checkInNotes: "On track with SRE team.",
-    locked: false,
-  },
-  {
-    id: "2",
-    employee: "Avery Johnson",
-    title: "Accelerate feature delivery",
-    description: "Ship two major client-requested modules.",
-    quarter: "Q2",
-    weightage: 60,
-    progress: 35,
-    shared: false,
-    status: "draft",
-    checkInNotes: "Awaiting design sign-off.",
-    locked: false,
-  },
-];
+const DEMO_EMPLOYEE = DEFAULT_DEMO_USER.name;
 
 const statusClass: Record<Goal["status"], string> = {
   draft: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100",
@@ -51,19 +25,35 @@ const statusClass: Record<Goal["status"], string> = {
 };
 
 export function GoalPortal() {
-  const [goals, setGoals] = useState<Goal[]>(initialGoals);
+  const [goals, setGoals] = useState<Goal[]>(() => cloneDemoGoals());
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(() => cloneDemoAudit());
   const [activeTab, setActiveTab] = useState<"goals" | "checkins" | "analytics">("goals");
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", description: "", quarter: "Q1" as Goal["quarter"], weightage: 10, shared: false });
+
+  const employeeGoals = useMemo(
+    () => goals.filter((goal) => goal.employee === DEMO_EMPLOYEE),
+    [goals]
+  );
 
   const metrics = useMemo(() => getGoalMetrics(goals), [goals]);
   const totalWeightage = useMemo(() => goals.reduce((sum, goal) => sum + goal.weightage, 0), [goals]);
   const grouped = useMemo(() => groupGoalsByQuarter(goals), [goals]);
   const recommendation = useMemo(() => getGoalRecommendations(goals.length, totalWeightage === GOAL_RULES.totalWeightage), [goals.length, totalWeightage]);
 
+  function resetDemo() {
+    if (!window.confirm("Reset all goals and activity to the demo seed?")) {
+      return;
+    }
+    setGoals(cloneDemoGoals());
+    setAuditEvents(cloneDemoAudit());
+    setAdminUnlocked(false);
+    setFeedback("Demo data restored.");
+  }
+
   async function onCreateGoal() {
-    const validation = validateGoal({ weightage: form.weightage }, goals);
+    const validation = validateGoal({ weightage: form.weightage }, employeeGoals);
     if (validation) {
       setFeedback(validation);
       return;
@@ -71,7 +61,7 @@ export function GoalPortal() {
 
     const next: Goal = {
       id: crypto.randomUUID(),
-      employee: "Avery Johnson",
+      employee: DEMO_EMPLOYEE,
       title: form.title.trim(),
       description: form.description.trim(),
       quarter: form.quarter,
@@ -81,6 +71,10 @@ export function GoalPortal() {
       status: "draft",
       checkInNotes: "",
       locked: false,
+      department: DEFAULT_DEMO_USER.department,
+      riskLevel: "medium",
+      dueDate: "2026-06-30",
+      managerComments: [],
     };
 
     if (!next.title || !next.description) {
@@ -95,13 +89,19 @@ export function GoalPortal() {
   }
 
   function submitForApproval() {
-    const message = canSubmitForApproval(goals);
+    const message = canSubmitForApproval(employeeGoals);
     if (message) {
       setFeedback(message);
       return;
     }
 
-    setGoals((prev) => prev.map((goal) => ({ ...goal, status: goal.status === "draft" ? "submitted" : goal.status, locked: true })));
+    setGoals((prev) =>
+      prev.map((goal) =>
+        goal.employee === DEMO_EMPLOYEE && goal.status === "draft"
+          ? { ...goal, status: "submitted" as const, locked: true }
+          : goal
+      )
+    );
     setFeedback("Goals submitted to manager for approval.");
   }
 
@@ -124,6 +124,10 @@ export function GoalPortal() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Button variant="secondary" size="sm" onClick={resetDemo}>
+            <RotateCcw className="mr-2 size-4" />
+            Reset demo
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => setAdminUnlocked((prev) => !prev)}>
             <LockOpen className="mr-2 size-4" />
             {adminUnlocked ? "Lock" : "Admin unlock"}
@@ -202,6 +206,7 @@ export function GoalPortal() {
                     <Badge className={statusClass[goal.status]}>{goal.status}</Badge>
                   </div>
                   <p className="text-sm text-slate-500">{goal.description}</p>
+                  <p className="mt-1 text-xs text-slate-400">{goal.employee} · {goal.department}</p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-100">{goal.quarter}</Badge>
                     <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-100">{goal.weightage}%</Badge>
@@ -239,7 +244,8 @@ export function GoalPortal() {
         <section className="grid gap-4 lg:grid-cols-2">
           <Card>
             <h2 className="mb-4 text-lg font-semibold">Analytics Dashboard</h2>
-            <p className="mb-4 text-sm text-slate-500">AI insight: {recommendation}</p>
+            <p className="mb-2 text-sm text-slate-500">AI insight: {recommendation}</p>
+            <p className="mb-4 text-xs text-slate-400">{auditEvents.length} demo activity events seeded (timeline in upcoming sprint).</p>
             <div className="space-y-3">
               {Object.entries(grouped).map(([quarter, quarterGoals]) => {
                 const quarterProgress = Math.round(quarterGoals.reduce((sum, item) => sum + item.progress, 0) / quarterGoals.length);
