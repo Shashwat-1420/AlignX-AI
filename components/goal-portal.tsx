@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ChartNoAxesColumn, LockOpen, RotateCcw, Share2, Target } from "lucide-react";
 
-const DEMO_EMPLOYEE = DEFAULT_DEMO_USER.name;
+const ACTIVE_EMPLOYEE = DEFAULT_DEMO_USER.name;
 
 const statusClass: Record<Goal["status"], string> = {
   draft: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100",
@@ -32,15 +32,23 @@ export function GoalPortal() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", description: "", quarter: "Q1" as Goal["quarter"], weightage: 10, shared: false });
 
-  const employeeGoals = useMemo(
-    () => goals.filter((goal) => goal.employee === DEMO_EMPLOYEE),
+  const activeEmployeeGoals = useMemo(
+    () => goals.filter((goal) => goal.employee === ACTIVE_EMPLOYEE),
     [goals]
   );
 
+  const employeeTotalWeightage = useMemo(
+    () => activeEmployeeGoals.reduce((sum, goal) => sum + goal.weightage, 0),
+    [activeEmployeeGoals]
+  );
+
   const metrics = useMemo(() => getGoalMetrics(goals), [goals]);
-  const totalWeightage = useMemo(() => goals.reduce((sum, goal) => sum + goal.weightage, 0), [goals]);
+  const orgTotalWeightage = useMemo(() => goals.reduce((sum, goal) => sum + goal.weightage, 0), [goals]);
   const grouped = useMemo(() => groupGoalsByQuarter(goals), [goals]);
-  const recommendation = useMemo(() => getGoalRecommendations(goals.length, totalWeightage === GOAL_RULES.totalWeightage), [goals.length, totalWeightage]);
+  const recommendation = useMemo(
+    () => getGoalRecommendations(goals.length, orgTotalWeightage === GOAL_RULES.totalWeightage),
+    [goals.length, orgTotalWeightage]
+  );
 
   function resetDemo() {
     if (!window.confirm("Reset all goals and activity to the demo seed?")) {
@@ -53,7 +61,7 @@ export function GoalPortal() {
   }
 
   async function onCreateGoal() {
-    const validation = validateGoal({ weightage: form.weightage }, employeeGoals);
+    const validation = validateGoal({ weightage: form.weightage }, activeEmployeeGoals);
     if (validation) {
       setFeedback(validation);
       return;
@@ -61,7 +69,7 @@ export function GoalPortal() {
 
     const next: Goal = {
       id: crypto.randomUUID(),
-      employee: DEMO_EMPLOYEE,
+      employee: ACTIVE_EMPLOYEE,
       title: form.title.trim(),
       description: form.description.trim(),
       quarter: form.quarter,
@@ -89,7 +97,7 @@ export function GoalPortal() {
   }
 
   function submitForApproval() {
-    const message = canSubmitForApproval(employeeGoals);
+    const message = canSubmitForApproval(activeEmployeeGoals);
     if (message) {
       setFeedback(message);
       return;
@@ -97,7 +105,7 @@ export function GoalPortal() {
 
     setGoals((prev) =>
       prev.map((goal) =>
-        goal.employee === DEMO_EMPLOYEE && goal.status === "draft"
+        goal.employee === ACTIVE_EMPLOYEE && goal.status === "draft"
           ? { ...goal, status: "submitted" as const, locked: true }
           : goal
       )
@@ -152,9 +160,9 @@ export function GoalPortal() {
           <p className="text-2xl font-semibold">{metrics.shared}</p>
         </Card>
         <Card className="transition-transform duration-300 hover:-translate-y-1">
-          <p className="text-sm text-slate-500">Weightage</p>
-          <p className="text-2xl font-semibold">{totalWeightage}% / {GOAL_RULES.totalWeightage}%</p>
-          <Progress value={(totalWeightage / GOAL_RULES.totalWeightage) * 100} />
+          <p className="text-sm text-slate-500">Org weightage</p>
+          <p className="text-2xl font-semibold">{orgTotalWeightage}% / {GOAL_RULES.totalWeightage}%</p>
+          <Progress value={Math.min(100, (orgTotalWeightage / GOAL_RULES.totalWeightage) * 100)} />
         </Card>
       </section>
 
@@ -192,7 +200,9 @@ export function GoalPortal() {
                 <Button onClick={onCreateGoal}>Create goal</Button>
                 <Button variant="secondary" onClick={submitForApproval}>Submit for manager approval</Button>
               </div>
-              <p className="text-xs text-slate-500">Rules: min {GOAL_RULES.minWeightage}% per goal, max {GOAL_RULES.maxGoals} goals, total = {GOAL_RULES.totalWeightage}%.</p>
+              <p className="text-xs text-slate-500">
+                Your plan: {employeeTotalWeightage}% / {GOAL_RULES.totalWeightage}% · Rules: min {GOAL_RULES.minWeightage}% per goal, max {GOAL_RULES.maxGoals} goals per employee.
+              </p>
             </div>
           </Card>
 
