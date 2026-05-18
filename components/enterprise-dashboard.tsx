@@ -113,8 +113,13 @@ function buildExecutiveSummary(goals: Goal[]) {
 }
 
 function formatAuditTime(timestamp: string) {
-  const date = new Date(timestamp);
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(timestamp).toLocaleString("en-IN", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 export function EnterpriseDashboard({
