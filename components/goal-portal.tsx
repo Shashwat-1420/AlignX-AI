@@ -1,6 +1,14 @@
 "use client";
+/*
+Import:
+- analyzeGoalText from ai/smart-analysis
+- AIInsightsPanel from components/ai-insights-panel
 
+Do not modify unrelated imports.
+*/
 import { useEffect, useMemo, useState } from "react";
+import { analyzeGoalText } from "@/ai/smart-analysis";
+import { AIInsightsPanel } from "@/components/ai-insights-panel";
 import { cloneDemoAudit, cloneDemoGoals, DEFAULT_DEMO_USER, DEMO_USERS } from "@/lib/demo-data";
 import { EnterpriseDashboard } from "@/components/enterprise-dashboard";
 import { GOAL_RULES, canSubmitForApproval, validateGoal } from "@/lib/goal-validation";
@@ -355,6 +363,11 @@ export function GoalPortal() {
                     Shared goal
                   </label>
                 </div>
+
+                {(form.title || form.description) && (
+                  <AIInsightsPanel analysis={analyzeGoalText(form.title, form.description)} />
+                )}
+
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={onCreateGoal} className={cn(roleReady && roleStyle.pill)}>
                     Create goal
