@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getGoalMetrics } from "@/analytics/metrics";
-import { getGoalRecommendations } from "@/ai/recommendations";
-import { groupGoalsByQuarter } from "@/dashboards/goal-summary";
 import { cloneDemoAudit, cloneDemoGoals, DEFAULT_DEMO_USER, DEMO_USERS } from "@/lib/demo-data";
+import { EnterpriseDashboard } from "@/components/enterprise-dashboard";
 import { GOAL_RULES, canSubmitForApproval, validateGoal } from "@/lib/goal-validation";
 import { cn } from "@/lib/utils";
 import { AuditEvent, DemoUser, Goal, UserRole } from "@/lib/types";
@@ -14,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ChartNoAxesColumn, LockOpen, MessageSquare, RotateCcw, Share2, Target } from "lucide-react";
+import { LockOpen, MessageSquare, RotateCcw } from "lucide-react";
 
 const ROLE_STORAGE_KEY = "alignx-role";
 
@@ -72,7 +70,7 @@ export function GoalPortal() {
   const [role, setRole] = useState<UserRole>("employee");
   const [activeUser, setActiveUser] = useState<DemoUser>(DEFAULT_DEMO_USER);
   const [roleReady, setRoleReady] = useState(false);
-  const [activeTab, setActiveTab] = useState<"goals" | "checkins" | "analytics">("goals");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "goals" | "checkins">("dashboard");
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
@@ -106,14 +104,6 @@ export function GoalPortal() {
   const employeeTotalWeightage = useMemo(
     () => validationGoals.reduce((sum, goal) => sum + goal.weightage, 0),
     [validationGoals]
-  );
-
-  const metrics = useMemo(() => getGoalMetrics(goals), [goals]);
-  const orgTotalWeightage = useMemo(() => goals.reduce((sum, goal) => sum + goal.weightage, 0), [goals]);
-  const grouped = useMemo(() => groupGoalsByQuarter(goals), [goals]);
-  const recommendation = useMemo(
-    () => getGoalRecommendations(goals.length, orgTotalWeightage === GOAL_RULES.totalWeightage),
-    [goals.length, orgTotalWeightage]
   );
 
   const roleStyle = ROLE_STYLES[role];
@@ -287,38 +277,8 @@ export function GoalPortal() {
         </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <Card className="transition-transform duration-300 hover:-translate-y-1">
-          <Target className="mb-2 size-4 text-indigo-500" />
-          <p className="text-sm text-slate-500">Total Goals (org)</p>
-          <p className="text-2xl font-semibold">{metrics.total}</p>
-        </Card>
-        <Card className="transition-transform duration-300 hover:-translate-y-1">
-          <ChartNoAxesColumn className="mb-2 size-4 text-emerald-500" />
-          <p className="text-sm text-slate-500">Avg Progress (org)</p>
-          <p className="text-2xl font-semibold">{metrics.avgProgress}%</p>
-        </Card>
-        <Card className="transition-transform duration-300 hover:-translate-y-1">
-          <Share2 className="mb-2 size-4 text-violet-500" />
-          <p className="text-sm text-slate-500">Shared Goals (org)</p>
-          <p className="text-2xl font-semibold">{metrics.shared}</p>
-        </Card>
-        <Card className={cn("transition-transform duration-300 hover:-translate-y-1", roleReady && "ring-1", roleReady && roleStyle.ring)}>
-          <p className="text-sm text-slate-500">Org weightage</p>
-          <p className="text-2xl font-semibold">
-            {orgTotalWeightage}% / {GOAL_RULES.totalWeightage}%
-          </p>
-          <Progress value={Math.min(100, (orgTotalWeightage / GOAL_RULES.totalWeightage) * 100)} />
-          {role === "employee" && (
-            <p className="mt-2 text-xs text-slate-400">
-              Your plan: {employeeTotalWeightage}% / {GOAL_RULES.totalWeightage}%
-            </p>
-          )}
-        </Card>
-      </section>
-
       <div className="flex flex-wrap gap-2">
-        {(["goals", "checkins", "analytics"] as const).map((tab) => (
+        {(["dashboard", "goals", "checkins"] as const).map((tab) => (
           <Button
             key={tab}
             variant={activeTab === tab ? "default" : "outline"}
@@ -330,6 +290,18 @@ export function GoalPortal() {
           </Button>
         ))}
       </div>
+
+      {activeTab === "dashboard" && (
+        <EnterpriseDashboard
+          goals={goals}
+          visibleGoals={visibleGoals}
+          auditEvents={auditEvents}
+          role={role}
+          activeUser={activeUser}
+          roleAccent={roleReady ? roleStyle.ring : undefined}
+          onGoToGoals={() => setActiveTab("goals")}
+        />
+      )}
 
       {feedback && (
         <p className="rounded-md border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-200">
@@ -569,49 +541,6 @@ export function GoalPortal() {
         </Card>
       )}
 
-      {activeTab === "analytics" && (
-        <section className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold">Analytics Dashboard (organization)</h2>
-            <p className="mb-2 text-sm text-slate-500">AI insight: {recommendation}</p>
-            <p className="mb-4 text-xs text-slate-400">{auditEvents.length} demo activity events seeded (timeline in upcoming sprint).</p>
-            <p className="mb-4 text-xs text-slate-400">
-              Showing {visibleGoals.length} goal{visibleGoals.length === 1 ? "" : "s"} in your {role} view · {metrics.total} org-wide.
-            </p>
-            <div className="space-y-3">
-              {Object.entries(grouped).map(([quarter, quarterGoals]) => {
-                const quarterProgress = Math.round(quarterGoals.reduce((sum, item) => sum + item.progress, 0) / quarterGoals.length);
-                return (
-                  <div key={quarter}>
-                    <div className="mb-1 flex justify-between text-sm">
-                      <span>{quarter}</span>
-                      <span>{quarterProgress}%</span>
-                    </div>
-                    <Progress value={quarterProgress} />
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold">Shared Goals</h2>
-            <div className="space-y-3">
-              {visibleGoals
-                .filter((goal) => goal.shared)
-                .map((goal) => (
-                  <div key={goal.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                    <p className="font-medium">{goal.title}</p>
-                    <p className="text-sm text-slate-500">{goal.description}</p>
-                    <p className="mt-1 text-xs text-slate-400">{goal.employee} · {goal.department}</p>
-                  </div>
-                ))}
-              {!visibleGoals.some((goal) => goal.shared) && (
-                <p className="text-sm text-slate-500">No shared goals in this view.</p>
-              )}
-            </div>
-          </Card>
-        </section>
-      )}
     </div>
   );
 }
