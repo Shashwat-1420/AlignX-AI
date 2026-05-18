@@ -10,7 +10,7 @@ AlignX AI is a hackathon-built enterprise SaaS prototype that streamlines organi
 
 ## Deployment
 
-[Add your deployed Vercel URL here:](https://align-x-ai.vercel.app/)
+(https://align-x-ai.vercel.app/)
 
 ```bash
 https://your-deployment-url.vercel.app
